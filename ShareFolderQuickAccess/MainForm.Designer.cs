@@ -56,17 +56,19 @@ namespace ShareFolderQuickAccess
             // heartbeatTimer
             // 
             heartbeatTimer.Interval = 60000;
+            heartbeatTimer.Tick += Heartbeat_Tick;
             // 
             // trayIcon
             // 
             trayIcon.Text = "共享文件夹一键直达";
+            trayIcon.DoubleClick += TrayIcon_DoubleClick;
             // 
             // lblPath
             // 
             lblPath.AutoSize = true;
             lblPath.Location = new Point(16, 21);
             lblPath.Name = "lblPath";
-            lblPath.Size = new Size(77, 21);
+            lblPath.Size = new Size(74, 17);
             lblPath.TabIndex = 0;
             lblPath.Text = "共享路径(&P):";
             // 
@@ -75,20 +77,21 @@ namespace ShareFolderQuickAccess
             pathBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             pathBox.Location = new Point(96, 17);
             pathBox.Name = "pathBox";
-            pathBox.Size = new Size(568, 31);
+            pathBox.Size = new Size(568, 23);
             pathBox.TabIndex = 1;
-            pathBox.Text = "\\\\server\\share";
+            pathBox.Text = "\\\\Rcominfoserver\\瑞康共享\\";
             // 
             // openButton
             // 
             openButton.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            openButton.Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold, GraphicsUnit.Point);
+            openButton.Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold);
             openButton.Location = new Point(16, 54);
             openButton.Name = "openButton";
             openButton.Size = new Size(530, 46);
             openButton.TabIndex = 2;
             openButton.Text = "📂  一键打开共享文件夹";
             openButton.UseVisualStyleBackColor = true;
+            openButton.Click += OpenButton_Click;
             // 
             // diagButton
             // 
@@ -97,8 +100,9 @@ namespace ShareFolderQuickAccess
             diagButton.Name = "diagButton";
             diagButton.Size = new Size(108, 46);
             diagButton.TabIndex = 3;
-            diagButton.Text = "🩺 诊断";
+            diagButton.Text = "\U0001fa7a 诊断";
             diagButton.UseVisualStyleBackColor = true;
+            diagButton.Click += DiagButton_Click;
             // 
             // keepAliveCheckBox
             // 
@@ -107,36 +111,38 @@ namespace ShareFolderQuickAccess
             keepAliveCheckBox.CheckState = CheckState.Checked;
             keepAliveCheckBox.Location = new Point(16, 114);
             keepAliveCheckBox.Name = "keepAliveCheckBox";
-            keepAliveCheckBox.Size = new Size(265, 25);
+            keepAliveCheckBox.Size = new Size(183, 21);
             keepAliveCheckBox.TabIndex = 4;
             keepAliveCheckBox.Text = "启用保活心跳（防空闲断连）";
+            keepAliveCheckBox.CheckedChanged += KeepAliveCheckBox_CheckedChanged;
             // 
             // lblInterval
             // 
             lblInterval.AutoSize = true;
             lblInterval.Location = new Point(300, 117);
             lblInterval.Name = "lblInterval";
-            lblInterval.Size = new Size(44, 21);
+            lblInterval.Size = new Size(35, 17);
             lblInterval.TabIndex = 5;
             lblInterval.Text = "间隔:";
             // 
             // intervalUpDown
             // 
-            intervalUpDown.Increment = 15;
+            intervalUpDown.Increment = new decimal(new int[] { 15, 0, 0, 0 });
             intervalUpDown.Location = new Point(348, 113);
             intervalUpDown.Maximum = new decimal(new int[] { 600, 0, 0, 0 });
             intervalUpDown.Minimum = new decimal(new int[] { 15, 0, 0, 0 });
             intervalUpDown.Name = "intervalUpDown";
-            intervalUpDown.Size = new Size(64, 31);
+            intervalUpDown.Size = new Size(64, 23);
             intervalUpDown.TabIndex = 6;
             intervalUpDown.Value = new decimal(new int[] { 60, 0, 0, 0 });
+            intervalUpDown.ValueChanged += IntervalUpDown_ValueChanged;
             // 
             // lblSec
             // 
             lblSec.AutoSize = true;
             lblSec.Location = new Point(418, 117);
             lblSec.Name = "lblSec";
-            lblSec.Size = new Size(26, 21);
+            lblSec.Size = new Size(20, 17);
             lblSec.TabIndex = 7;
             lblSec.Text = "秒";
             // 
@@ -146,9 +152,9 @@ namespace ShareFolderQuickAccess
             trayCheckBox.AutoSize = true;
             trayCheckBox.Checked = true;
             trayCheckBox.CheckState = CheckState.Checked;
-            trayCheckBox.Location = new Point(452, 114);
+            trayCheckBox.Location = new Point(525, 114);
             trayCheckBox.Name = "trayCheckBox";
-            trayCheckBox.Size = new Size(232, 25);
+            trayCheckBox.Size = new Size(159, 21);
             trayCheckBox.TabIndex = 8;
             trayCheckBox.Text = "关闭窗口时最小化到托盘";
             // 
@@ -157,6 +163,7 @@ namespace ShareFolderQuickAccess
             lblFallback.AutoSize = true;
             lblFallback.Location = new Point(16, 150);
             lblFallback.Name = "lblFallback";
+            lblFallback.Size = new Size(50, 17);
             lblFallback.TabIndex = 11;
             lblFallback.Text = "IP 兜底:";
             // 
@@ -164,9 +171,9 @@ namespace ShareFolderQuickAccess
             // 
             fallbackIpBox.Location = new Point(96, 146);
             fallbackIpBox.Name = "fallbackIpBox";
-            fallbackIpBox.Size = new Size(150, 31);
+            fallbackIpBox.Size = new Size(150, 23);
             fallbackIpBox.TabIndex = 12;
-            fallbackIpBox.Text = "192.168.1.10";
+            fallbackIpBox.Text = "192.168.0.107";
             // 
             // lblFallbackHint
             // 
@@ -174,6 +181,7 @@ namespace ShareFolderQuickAccess
             lblFallbackHint.ForeColor = Color.Gray;
             lblFallbackHint.Location = new Point(254, 150);
             lblFallbackHint.Name = "lblFallbackHint";
+            lblFallbackHint.Size = new Size(68, 17);
             lblFallbackHint.TabIndex = 13;
             lblFallbackHint.Text = "留空则禁用";
             // 
@@ -186,6 +194,7 @@ namespace ShareFolderQuickAccess
             fixHostsButton.TabIndex = 14;
             fixHostsButton.Text = "🔧 一键写入 hosts 根治";
             fixHostsButton.UseVisualStyleBackColor = true;
+            fixHostsButton.Click += FixHostsButton_Click;
             // 
             // logGroup
             // 
@@ -203,7 +212,7 @@ namespace ShareFolderQuickAccess
             logBox.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             logBox.BackColor = Color.White;
             logBox.BorderStyle = BorderStyle.None;
-            logBox.Font = new Font("Consolas", 9.5F, FontStyle.Regular, GraphicsUnit.Point);
+            logBox.Font = new Font("Consolas", 9.5F);
             logBox.Location = new Point(12, 24);
             logBox.Name = "logBox";
             logBox.ReadOnly = true;
@@ -214,15 +223,15 @@ namespace ShareFolderQuickAccess
             // statusStrip
             // 
             statusStrip.Items.AddRange(new ToolStripItem[] { statusLabel });
-            statusStrip.Location = new Point(0, 490);
+            statusStrip.Location = new Point(0, 498);
             statusStrip.Name = "statusStrip";
-            statusStrip.Size = new Size(680, 30);
+            statusStrip.Size = new Size(680, 22);
             statusStrip.TabIndex = 10;
             // 
             // statusLabel
             // 
             statusLabel.Name = "statusLabel";
-            statusLabel.Size = new Size(665, 25);
+            statusLabel.Size = new Size(665, 17);
             statusLabel.Spring = true;
             statusLabel.Text = "● 检测中…";
             statusLabel.TextAlign = ContentAlignment.MiddleLeft;
@@ -230,6 +239,7 @@ namespace ShareFolderQuickAccess
             // MainForm
             // 
             AcceptButton = openButton;
+            AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(680, 520);
             Controls.Add(lblPath);
@@ -251,16 +261,6 @@ namespace ShareFolderQuickAccess
             Name = "MainForm";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "共享文件夹一键直达";
-            // 
-            // 事件绑定（集中放在末尾，避免设计器初始化期间触发副作用）
-            // 
-            openButton.Click += new EventHandler(OpenButton_Click);
-            diagButton.Click += new EventHandler(DiagButton_Click);
-            keepAliveCheckBox.CheckedChanged += new EventHandler(KeepAliveCheckBox_CheckedChanged);
-            intervalUpDown.ValueChanged += new EventHandler(IntervalUpDown_ValueChanged);
-            heartbeatTimer.Tick += new EventHandler(Heartbeat_Tick);
-            trayIcon.DoubleClick += new EventHandler(TrayIcon_DoubleClick);
-            fixHostsButton.Click += new EventHandler(FixHostsButton_Click);
             ((System.ComponentModel.ISupportInitialize)intervalUpDown).EndInit();
             logGroup.ResumeLayout(false);
             statusStrip.ResumeLayout(false);
