@@ -43,6 +43,7 @@ namespace ShareFolderQuickAccess
             lblFallback = new Label();
             fallbackIpBox = new TextBox();
             lblFallbackHint = new Label();
+            fixHostsButton = new Button();
             logGroup = new GroupBox();
             logBox = new RichTextBox();
             statusStrip = new StatusStrip();
@@ -174,7 +175,17 @@ namespace ShareFolderQuickAccess
             lblFallbackHint.Location = new Point(254, 150);
             lblFallbackHint.Name = "lblFallbackHint";
             lblFallbackHint.TabIndex = 13;
-            lblFallbackHint.Text = "名称解析失败时自动改用此 IP 直连（留空禁用）";
+            lblFallbackHint.Text = "留空则禁用";
+            // 
+            // fixHostsButton
+            // 
+            fixHostsButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            fixHostsButton.Location = new Point(452, 144);
+            fixHostsButton.Name = "fixHostsButton";
+            fixHostsButton.Size = new Size(212, 34);
+            fixHostsButton.TabIndex = 14;
+            fixHostsButton.Text = "🔧 一键写入 hosts 根治";
+            fixHostsButton.UseVisualStyleBackColor = true;
             // 
             // logGroup
             // 
@@ -233,6 +244,7 @@ namespace ShareFolderQuickAccess
             Controls.Add(lblFallback);
             Controls.Add(fallbackIpBox);
             Controls.Add(lblFallbackHint);
+            Controls.Add(fixHostsButton);
             Controls.Add(logGroup);
             Controls.Add(statusStrip);
             MinimumSize = new Size(560, 420);
@@ -248,6 +260,7 @@ namespace ShareFolderQuickAccess
             intervalUpDown.ValueChanged += new EventHandler(IntervalUpDown_ValueChanged);
             heartbeatTimer.Tick += new EventHandler(Heartbeat_Tick);
             trayIcon.DoubleClick += new EventHandler(TrayIcon_DoubleClick);
+            fixHostsButton.Click += new EventHandler(FixHostsButton_Click);
             ((System.ComponentModel.ISupportInitialize)intervalUpDown).EndInit();
             logGroup.ResumeLayout(false);
             statusStrip.ResumeLayout(false);
@@ -270,6 +283,7 @@ namespace ShareFolderQuickAccess
         private Label lblFallback;
         private TextBox fallbackIpBox;
         private Label lblFallbackHint;
+        private Button fixHostsButton;
         private GroupBox logGroup;
         private RichTextBox logBox;
         private StatusStrip statusStrip;

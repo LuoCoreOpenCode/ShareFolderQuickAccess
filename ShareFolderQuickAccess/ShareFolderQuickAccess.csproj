@@ -10,7 +10,7 @@
     <AssemblyName>ShareFolderQuickAccess</AssemblyName>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationDefaultFont>Microsoft YaHei UI, 9pt</ApplicationDefaultFont>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Description>共享文件夹一键直达：自动清理失效 SMB 会话、保活心跳、防止 0x80070043 间歇性访问失败</Description>
   </PropertyGroup>
 

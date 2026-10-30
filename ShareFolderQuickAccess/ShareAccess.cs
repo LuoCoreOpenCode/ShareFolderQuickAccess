@@ -118,22 +118,56 @@ internal static partial class ShareAccess
         }
     }
 
+    /// <summary>认证类错误判定：需要用户提供/更新凭据才能继续。</summary>
+    public static bool IsAuthError(int code) => code is 5 or 86 or 1219 or 1311 or 1312 or 1326;
+
+    /// <summary>
+    /// 用显式凭据建立 SMB 连接（WNetAddConnection2）；1219 凭据冲突时自动清旧会话重试一次。
+    /// save=true 时同时把凭据写入 Windows 凭据管理器（系统加密保管，不落配置文件）。
+    /// </summary>
+    public static (bool Ok, string Message) ConnectWithCredentials(string uncPath, string user, string password, bool save)
+    {
+        var nr = new NativeMethods.NetResource { lpRemoteName = uncPath };
+        int flags = (save ? NativeMethods.CONNECT_UPDATE_PROFILE : NativeMethods.CONNECT_TEMPORARY)
+                  | NativeMethods.CONNECT_INTERACTIVE;
+
+        int r = NativeMethods.WNetAddConnection2(nr, password, user, flags);
+        if (r == 1219) // 同一服务器存在不同账号的会话 → 清掉再试
+        {
+            ClearStaleSessions(GetServerName(uncPath), uncPath);
+            r = NativeMethods.WNetAddConnection2(nr, password, user, flags);
+        }
+        if (r != 0) return (false, $"WNetAddConnection2 失败：{DescribeWin32Code(r)}");
+
+        if (save)
+        {
+            bool stored = NativeMethods.CredWriteServerCredential(GetServerName(uncPath), user, password);
+            return stored
+                ? (true, "已连接，凭据已存入 Windows 凭据管理器")
+                : (true, "已连接，但凭据保存失败（下次访问可能仍需输入）");
+        }
+        return (true, "已连接（凭据仅本次会话有效）");
+    }
+
     /// <summary>把 Win32 错误码翻译成中文说明。</summary>
+    public static string DescribeWin32Code(int code) => code switch
+    {
+        5 => "拒绝访问（错误 5）：当前账号无权限或凭据已失效",
+        53 => "找不到网络路径（错误 53）：服务器不可达",
+        64 => "指定的网络名不再可用（错误 64）：会话已失效",
+        67 => "找不到网络名（错误 67 / 0x80070043）：会话失效或共享暂时不可用",
+        86 => "需要进一步的身份验证（错误 86）",
+        1219 => "凭据冲突（错误 1219）：同一服务器存在不同账号的连接",
+        1326 => "用户名或密码错误（错误 1326）",
+        1311 or 1312 => "找不到登录会话（错误 " + code + "，凭据问题）",
+        2250 => "该网络连接不存在（错误 2250）",
+        _ => $"Win32 错误 {code}",
+    };
+
+    /// <summary>把异常（含 HResult 错误码）翻译成中文说明。</summary>
     private static string DescribeError(Exception ex)
     {
         int code = ex.HResult & 0xFFFF;
-        string known = code switch
-        {
-            5 => "拒绝访问（错误 5）：当前账号无权限或凭据已失效",
-            53 => "找不到网络路径（错误 53）：服务器不可达",
-            64 => "指定的网络名不再可用（错误 64）：会话已失效",
-            67 => "找不到网络名（错误 67 / 0x80070043）：会话失效或共享暂时不可用",
-            86 => "需要进一步的身份验证（错误 86）",
-            1219 => "凭据冲突（错误 1219）：同一服务器存在不同账号的连接",
-            1326 => "用户名或密码错误（错误 1326）",
-            1312 or 1311 => "找不到登录会话（凭据问题）",
-            _ => ex.Message,
-        };
-        return code != 0 ? $"{known}（原始异常：{ex.GetType().Name}）" : known;
+        return code != 0 ? $"{DescribeWin32Code(code)}（原始异常：{ex.GetType().Name}）" : ex.Message;
     }
 }

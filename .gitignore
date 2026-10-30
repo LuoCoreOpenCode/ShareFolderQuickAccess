@@ -6,6 +6,7 @@ obj/
 .vs/
 *.user
 *.suo
+*.pubxml.user
 
 # 发布输出
 publish/

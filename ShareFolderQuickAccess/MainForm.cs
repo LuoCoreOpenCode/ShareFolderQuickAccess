@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Win32;
 
 namespace ShareFolderQuickAccess;
@@ -45,6 +46,8 @@ public partial class MainForm : Form
     private async void OpenButton_Click(object? sender, EventArgs e) => await OpenShareAsync();
 
     private async void DiagButton_Click(object? sender, EventArgs e) => await RunDiagnosticsAsync();
+
+    private async void FixHostsButton_Click(object? sender, EventArgs e) => await FixHostsAsync();
 
     private void KeepAliveCheckBox_CheckedChanged(object? sender, EventArgs e) => ApplyHeartbeat(persist: true);
 
@@ -148,18 +151,25 @@ public partial class MainForm : Form
             }
 
             // ① 正常路径：按服务器名称访问
-            var (ok, attempt) = await TryProbeWithRecoveryAsync(path, quiet);
+            var (ok, attempt, lastCode) = await TryProbeWithRecoveryAsync(path, quiet);
             if (ok) return OnConnected(path, attempt > 1);
+            if (ShareAccess.IsAuthError(lastCode) && await TryConnectWithCredentialsAsync(path, quiet))
+                return OnConnected(path, recovered: true);
 
             // ② IP 兜底：名称解析/共享枚举失败时改用 IP 直连
             var ipPath = BuildIpFallbackPath(path);
             if (ipPath is not null)
             {
                 Log($"→ 名称访问失败，尝试 IP 兜底：{ipPath}");
-                var (ok2, attempt2) = await TryProbeWithRecoveryAsync(ipPath, quiet);
+                var (ok2, attempt2, code2) = await TryProbeWithRecoveryAsync(ipPath, quiet);
                 if (ok2)
                 {
                     Log("✔ IP 兜底连接成功（名称解析暂时异常，建议尽快配置 hosts 根治）。");
+                    return OnConnected(ipPath, recovered: true);
+                }
+                if (ShareAccess.IsAuthError(code2) && await TryConnectWithCredentialsAsync(ipPath, quiet))
+                {
+                    Log("✔ IP 兜底凭据连接成功。");
                     return OnConnected(ipPath, recovered: true);
                 }
             }
@@ -181,15 +191,17 @@ public partial class MainForm : Form
         }
     }
 
-    /// <summary>对指定路径探测最多 3 次；会话类错误（64/67/1219）先清理失效会话再重试。</summary>
-    private async Task<(bool Ok, int Attempt)> TryProbeWithRecoveryAsync(string path, bool quiet)
+    /// <summary>对指定路径探测最多 3 次；会话类错误（64/67/1219）先清理失效会话再重试。返回最后一次的错误码。</summary>
+    private async Task<(bool Ok, int Attempt, int LastCode)> TryProbeWithRecoveryAsync(string path, bool quiet)
     {
         var server = ShareAccess.GetServerName(path);
+        int lastCode = 0;
         for (int attempt = 1; attempt <= 3; attempt++)
         {
             SetStatus(NetState.Checking);
             var (ok, code, err) = await Task.Run(() => ShareAccess.Probe(path));
-            if (ok) return (true, attempt);
+            if (ok) return (true, attempt, 0);
+            lastCode = code;
 
             // 只在状态变化或非静默模式下打日志，避免心跳刷屏
             if (!quiet || _lastState != false)
@@ -211,7 +223,34 @@ public partial class MainForm : Form
                 await Task.Delay(800);
             }
         }
-        return (false, 3);
+        return (false, 3, lastCode);
+    }
+
+    /// <summary>认证失败时弹出凭据对话框，用 WNet 带凭据连接（可选存入 Windows 凭据管理器）。心跳静默期只提示不打扰。</summary>
+    private async Task<bool> TryConnectWithCredentialsAsync(string path, bool quiet)
+    {
+        if (quiet)
+        {
+            if (_lastState != false)
+                Log("🔑 共享需要凭据（认证被拒）。心跳不弹窗打扰，点击「一键打开」即可输入凭据完成连接。");
+            return false;
+        }
+
+        using var dlg = new CredentialDialog(path);
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+        {
+            Log("→ 已取消凭据输入。");
+            return false;
+        }
+        if (dlg.UserName.Length == 0)
+        {
+            Log("✖ 用户名为空，未连接。");
+            return false;
+        }
+
+        var (ok, msg) = await Task.Run(() => ShareAccess.ConnectWithCredentials(path, dlg.UserName, dlg.Password, dlg.SaveToVault));
+        Log(ok ? $"🔑 {msg}（{path}）" : $"✖ 凭据连接失败：{msg}");
+        return ok;
     }
 
     /// <summary>根据主路径与兜底 IP 构造 \\ip\share 路径；不满足条件返回 null。</summary>
@@ -284,6 +323,79 @@ public partial class MainForm : Form
         finally
         {
             diagButton.Enabled = true;
+        }
+    }
+
+    /// <summary>
+    /// 一键把「IP 兜底」中的 IP 与服务器名映射写入系统 hosts：
+    /// 本实例只读检查 → UAC 提权子实例执行写入（自动备份 hosts.bak）→ 轮询确认 → 刷 DNS → 重连验证。
+    /// </summary>
+    private async Task FixHostsAsync()
+    {
+        var path = pathBox.Text.Trim();
+        if (!ShareAccess.IsValidUnc(path))
+        {
+            Log("路径格式不正确，无法写 hosts。");
+            return;
+        }
+        var server = ShareAccess.GetServerName(path);
+        var ip = fallbackIpBox.Text.Trim();
+        if (ip.Length == 0 || !System.Net.IPAddress.TryParse(ip, out _))
+        {
+            Log("请先在「IP 兜底」框填写服务器 IP，再执行 hosts 写入。");
+            return;
+        }
+        if (string.Equals(server, ip, StringComparison.OrdinalIgnoreCase))
+        {
+            Log("共享路径本来就是 IP 地址，无需 hosts 映射。");
+            return;
+        }
+        if (HostsEditor.EntryExists(server, ip))
+        {
+            Log($"✔ hosts 已包含映射：{ip}  {server}（无需重复写入）。");
+            HostsEditor.FlushDns();
+            await EnsureConnectedAsync();
+            return;
+        }
+
+        var confirm = MessageBox.Show(this,
+            $"将以管理员身份向 hosts 写入一行名称映射，根治名称解析：\n\n    {ip}\t{server}\n\n" +
+            "（原 hosts 文件自动备份为 hosts.bak；需要在 UAC 弹窗点\"是\"）",
+            "写入 hosts", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes) return;
+
+        try
+        {
+            var exe = Environment.ProcessPath ?? Application.ExecutablePath;
+            Process.Start(new ProcessStartInfo(exe, $"--fix-hosts \"{server}\" \"{ip}\"")
+            { UseShellExecute = true, Verb = "runas" });
+        }
+        catch
+        {
+            Log("✖ UAC 提权被取消或失败，未写入 hosts。可重试，或手动添加该行映射。");
+            return;
+        }
+
+        Log("→ 等待 UAC 授权与 hosts 写入…");
+        fixHostsButton.Enabled = false;
+        try
+        {
+            for (int i = 0; i < 30; i++)
+            {
+                await Task.Delay(2000);
+                if (HostsEditor.EntryExists(server, ip))
+                {
+                    HostsEditor.FlushDns();
+                    Log($"✔ hosts 写入成功：{ip}  {server}，DNS 缓存已刷新。");
+                    await EnsureConnectedAsync();
+                    return;
+                }
+            }
+            Log("⚠ 60 秒内未检测到写入结果（可能取消了 UAC）。可重试或手动添加。");
+        }
+        finally
+        {
+            fixHostsButton.Enabled = true;
         }
     }
 
